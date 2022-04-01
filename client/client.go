@@ -61,7 +61,6 @@ func readConnection(conn net.Conn) {
 		for {
 			ok := scanner.Scan()
 			text := scanner.Text()
-			fmt.Println(text)
 
 			command := handleCommands(text)
 			if !command {

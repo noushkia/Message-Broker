@@ -9,7 +9,7 @@ import (
 
 //TODO Add buffer overflow handler
 
-type handler func(conn net.Conn) error
+type handler func(conn net.Conn, payLoad map[string]string) error
 
 type Subscriber struct {
 	// ID is subscribers id
@@ -63,14 +63,18 @@ func (broker *Broker) Publish(topic string, payload map[string]string) error {
 		return nil
 	}
 
-	//generate new event to send to subscribers?
-
 	broker.Mutex.Lock()
 	defer broker.Mutex.Unlock()
 
+	// This can be fixed?
 	for _, sub := range subs {
-		if err := sub.Handler(sub.Conn); err != nil {
-			return err
+		if err := sub.Handler(sub.Conn, payload); err != nil {
+			// Connection error; The client quit
+			if _, t := err.(*net.OpError); t {
+				continue
+			} else {
+				return err
+			}
 		}
 	}
 

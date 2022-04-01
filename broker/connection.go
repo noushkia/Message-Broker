@@ -13,6 +13,7 @@ import (
 
 var addr = flag.String("addr", "", "The address to listen to; default is \"\" (all interfaces).")
 var port = flag.Int("port", 8000, "The port to listen on; default is 8000.")
+var maxLen = flag.Int("maxl", 10, "The maximum queue length for each topic")
 
 func main() {
 	flag.Parse()
@@ -24,7 +25,7 @@ func main() {
 	fmt.Printf("Listening on %s.\n", src)
 
 	// Start newBroker
-	newBroker := broker.NewBroker(10)
+	newBroker := broker.NewBroker(*maxLen)
 
 	// Close the connection in the end
 	defer func(listener net.Listener) {
@@ -66,6 +67,8 @@ func handleConnection(conn net.Conn, broker *broker.Broker) {
 		}
 	}
 
+	//broker.UnSubscribe(conn)
+
 	fmt.Println("Client/Server at " + remoteAddr + " disconnected.")
 }
 
@@ -79,11 +82,11 @@ func handleMessage(message string, conn net.Conn, broker *broker.Broker) bool {
 			fmt.Println("Client TCP connection closed")
 			return false
 		case strings.Fields(message)[0] == "-subscribe":
-			_, err2 := broker.Subscribe(strings.Join(strings.Fields(message)[1:], " "), conn, func(conn net.Conn) error {
-				//conn.Write()
-				//TODO What to do?
-				return nil
-			})
+			_, err2 := broker.Subscribe(strings.Join(strings.Fields(message)[1:], " "), conn,
+				func(conn net.Conn, payLoad map[string]string) error {
+					_, err := conn.Write([]byte(toString(payLoad)))
+					return err
+				})
 			if err2 != nil {
 				fmt.Println("-> Error subscribing")
 				_, _ = conn.Write([]byte("-subscribe failed\n"))
@@ -123,4 +126,12 @@ func getPayload(netData string) map[string]string {
 	payLoad[elements[0]] = elements[1]
 	payLoad[elements[2]] = strings.Join(elements[3:], " ")
 	return payLoad
+}
+
+func toString(payLoad map[string]string) string {
+	var str string
+	for key, value := range payLoad {
+		str += key + ": " + value + "\n"
+	}
+	return str
 }
