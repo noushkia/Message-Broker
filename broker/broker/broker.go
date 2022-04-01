@@ -1,15 +1,22 @@
 package broker
 
 import (
+	"errors"
 	"fmt"
 	"github.com/google/uuid"
 	"net"
 	"sync"
 )
 
+const workerSize = 10
+
 //TODO Add buffer overflow handler
 
+var OverflowError = errors.New("broker overflow")
+
 type handler func(conn net.Conn, payLoad map[string]string) error
+
+type PayLoad map[string]string
 
 type Subscriber struct {
 	// ID is subscribers id
@@ -22,36 +29,55 @@ type Subscriber struct {
 	Handler handler
 }
 
+type Event struct {
+	Topic   string
+	payLoad PayLoad
+}
+
 type Broker struct {
 	// MaxLen is the maximum length of the queue
 	MaxLen int
 	// Queue is a map of topic: payload which is the server messages
-	Queue map[string][]map[string]string
+	Queue map[string][]PayLoad
 	// Subscribers is the list of subscribers with subscribed topics
 	Subscribers map[string][]*Subscriber
 	// Mutex is used for security during concurrent execution
 	Mutex sync.Mutex
+	// Chan is used for asynchronous publishing
+	// It's a channel that stores the topics to be published
+	// with their respective payLoad
+	Chan chan *Event
 }
 
-func NewBroker(maxLen int) *Broker {
-	queue := make(map[string][]map[string]string)
+func NewBroker(maxLen int, workerSize int) *Broker {
+	queue := make(map[string][]PayLoad)
 	subscribers := make(map[string][]*Subscriber)
 
-	return &Broker{
+	newBroker := &Broker{
 		MaxLen:      maxLen,
 		Queue:       queue,
 		Subscribers: subscribers,
+		Chan:        make(chan *Event),
+	}
+
+	newBroker.startPublishChan(workerSize)
+
+	return newBroker
+}
+
+func (broker *Broker) startPublishChan(size int) {
+	for i := 0; i < size; i++ {
+		go broker.publishAsync()
 	}
 }
 
-func (broker *Broker) Publish(topic string, payload map[string]string) error {
+func (broker *Broker) Publish(topic string, payload PayLoad) error {
 
 	broker.Mutex.Lock()
 
 	if len(broker.Queue[topic]) > broker.MaxLen {
 		broker.Mutex.Unlock()
-		return nil
-		//return Overflow
+		return OverflowError
 	}
 
 	broker.Queue[topic] = append(broker.Queue[topic], payload)
@@ -71,6 +97,7 @@ func (broker *Broker) Publish(topic string, payload map[string]string) error {
 		if err := sub.Handler(sub.Conn, payload); err != nil {
 			// Connection error; The client quit
 			if _, t := err.(*net.OpError); t {
+				//TODO Remove this sub
 				continue
 			} else {
 				return err
@@ -79,6 +106,25 @@ func (broker *Broker) Publish(topic string, payload map[string]string) error {
 	}
 
 	delete(broker.Queue, topic)
+
+	return nil
+}
+
+func (broker *Broker) publishAsync() {
+	for event := range broker.Chan {
+		if err := broker.Publish(event.Topic, event.payLoad); err != nil {
+			continue
+		}
+	}
+}
+
+func (broker *Broker) PublishAsync(topic string, payload PayLoad) error {
+	event := &Event{
+		Topic:   topic,
+		payLoad: payload,
+	}
+
+	broker.Chan <- event
 
 	return nil
 }
