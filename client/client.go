@@ -33,7 +33,8 @@ func main() {
 	}
 
 	fmt.Println("Connected to broker\nTo subscribe to a topic use the following format:\n" +
-		"-subscribe <topic>")
+		"-subscribe <topic>\nTo publish a message on a topic use the following format:" +
+		"\n-publish <topic> header <header> body <body>\nTo exit use \"-quit\"")
 
 	go readConnection(conn)
 
@@ -88,6 +89,14 @@ func handleCommands(text string) bool {
 					fmt.Println("\b\bTopic subscription failed!")
 				} else {
 					fmt.Println("\b\bTopic subscription successful!")
+				}
+				// Two-way communication
+				// Client can both subscribe and publish topics
+			case strings.Fields(text)[0] == "-publish":
+				if strings.Fields(text)[1] != "successful" {
+					fmt.Println("\b\bMessage publishing failed!")
+				} else {
+					fmt.Println("\b\bMessage publishing successful!")
 				}
 			}
 

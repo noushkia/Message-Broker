@@ -33,7 +33,7 @@ func main() {
 	}
 
 	fmt.Println("Connected to broker\nTo publish a message on a topic use the following format:\n" +
-		"-publish <topic> header <header> body <body>")
+		"-publish <topic> header <header> body <body>\nTo exit use \"-quit\"")
 
 	go readConnection(conn)
 

@@ -94,6 +94,33 @@ func handleSubscription(message string, conn net.Conn, broker *broker.Broker) bo
 	return true
 }
 
+func handlePublish(message string, conn net.Conn, broker *broker.Broker) bool {
+	topicIndex := 1
+	if strings.Fields(message)[1] == "-async" {
+		topicIndex = 2
+	}
+	topic := strings.Fields(message)[topicIndex]
+	payLoad := getPayload(message, topicIndex)
+
+	var err3 error
+	if topicIndex == 1 { // sync
+		err3 = broker.Publish(topic, payLoad)
+	} else if topicIndex == 2 { // async
+		err3 = broker.PublishAsync(topic, payLoad)
+	}
+
+	if err3 != nil {
+		fmt.Println("-> Error publishing")
+		_, _ = conn.Write([]byte("-publish failed\n"))
+		fmt.Println(time.Now(), err3)
+		_, _ = conn.Write([]byte(err3.Error() + "\n"))
+		return true
+	} else {
+		_, _ = conn.Write([]byte("-publish successful\n"))
+	}
+	return true
+}
+
 func handleMessage(message string, conn net.Conn, broker *broker.Broker) bool {
 	fmt.Println("> " + message)
 
@@ -104,32 +131,9 @@ func handleMessage(message string, conn net.Conn, broker *broker.Broker) bool {
 			fmt.Println("Client TCP connection closed")
 			return false
 		case strings.Fields(message)[0] == "-subscribe":
-			handleSubscription(message, conn, broker)
+			return handleSubscription(message, conn, broker)
 		case strings.Fields(message)[0] == "-publish":
-			topicIndex := 1
-			if strings.Fields(message)[1] == "-async" {
-				topicIndex = 2
-			}
-			topic := strings.Fields(message)[topicIndex]
-			payLoad := getPayload(message, topicIndex)
-
-			var err3 error
-			if topicIndex == 1 { // sync
-				err3 = broker.Publish(topic, payLoad)
-			} else if topicIndex == 2 { // async
-				err3 = broker.PublishAsync(topic, payLoad)
-			}
-
-			if err3 != nil {
-				fmt.Println("-> Error publishing")
-				_, _ = conn.Write([]byte("-publish failed\n"))
-				fmt.Println(time.Now(), err3)
-				_, _ = conn.Write([]byte(err3.Error() + "\n"))
-				return true
-			} else {
-				_, _ = conn.Write([]byte("-publish successful\n"))
-			}
-
+			return handlePublish(message, conn, broker)
 		}
 	}
 	return true
